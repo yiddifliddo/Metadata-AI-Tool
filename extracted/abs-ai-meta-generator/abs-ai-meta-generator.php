@@ -3,7 +3,7 @@
  * Plugin Name: ABS AI Meta Generator
  * Plugin URI: https://americanbiotechsupply.com
  * Description: AI-powered meta description and focus keyword generator for product pages. Scans the live product URL and generates SEO-optimized 160 character meta descriptions and focus keywords for Yoast.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Standex Scientific
  * Author URI: https://americanbiotechsupply.com
  * Text Domain: abs-ai-meta
@@ -602,7 +602,7 @@ class ABS_AI_Meta_Generator {
             'abs-ai-meta-admin',
             plugin_dir_url(__FILE__) . 'admin.js',
             ['jquery'],
-            '1.2.0',
+            '1.3.0',
             true
         );
         
