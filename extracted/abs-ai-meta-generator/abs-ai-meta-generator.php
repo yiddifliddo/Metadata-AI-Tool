@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ABS AI Meta Generator
  * Plugin URI: https://americanbiotechsupply.com
- * Description: AI-powered meta description generator for product pages. Scans the live product URL and generates SEO-optimized 160 character meta descriptions for Yoast.
- * Version: 1.1.1
+ * Description: AI-powered meta description and focus keyword generator for product pages. Scans the live product URL and generates SEO-optimized 160 character meta descriptions and focus keywords for Yoast.
+ * Version: 1.2.0
  * Author: Standex Scientific
  * Author URI: https://americanbiotechsupply.com
  * Text Domain: abs-ai-meta
@@ -170,14 +170,22 @@ class ABS_AI_Meta_Generator {
             <?php else : ?>
             
             <div class="card" style="max-width: 100%; padding: 20px; margin-top: 20px;">
-                <h2>Step 1: Scan for Products Missing Meta Descriptions</h2>
-                <p>Click the button below to find all published products that don't have a Yoast meta description.</p>
-                
+                <h2>Step 1: Scan for Products Missing SEO Data</h2>
+                <p>Find published products missing a Yoast meta description and/or focus keyword.</p>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: bold;">Scan for products missing:</label><br>
+                    <label style="margin-right: 15px;"><input type="radio" name="abs-scan-mode" value="either" checked> Meta description OR focus keyword</label>
+                    <label style="margin-right: 15px;"><input type="radio" name="abs-scan-mode" value="meta"> Meta description only</label>
+                    <label style="margin-right: 15px;"><input type="radio" name="abs-scan-mode" value="focus"> Focus keyword only</label>
+                    <label><input type="radio" name="abs-scan-mode" value="both"> Missing BOTH</label>
+                </div>
+
                 <button type="button" id="abs-scan-btn" class="button button-primary button-large">
                     <span class="dashicons dashicons-search" style="margin-top: 4px;"></span>
-                    Scan for Missing Meta
+                    Scan for Missing SEO Data
                 </button>
-                
+
                 <div id="abs-scan-loading" style="display: none; margin-top: 15px;">
                     <span class="spinner is-active" style="float: left;"></span>
                     <span style="margin-left: 10px;">Scanning products...</span>
@@ -195,7 +203,7 @@ class ABS_AI_Meta_Generator {
                         Select All
                     </label>
                     <span style="margin-left: 20px;">
-                        Batch Size: 
+                        Batch Size:
                         <select id="abs-batch-size">
                             <option value="1">1 at a time (safest)</option>
                             <option value="3" selected>3 at a time</option>
@@ -204,7 +212,7 @@ class ABS_AI_Meta_Generator {
                         </select>
                     </span>
                     <span style="margin-left: 20px;">
-                        Delay between batches: 
+                        Delay between batches:
                         <select id="abs-batch-delay">
                             <option value="1000">1 second</option>
                             <option value="2000" selected>2 seconds</option>
@@ -212,6 +220,15 @@ class ABS_AI_Meta_Generator {
                             <option value="5000">5 seconds</option>
                         </select>
                     </span>
+                </div>
+
+                <div style="margin-bottom: 15px; padding: 10px; background: #f0f6fc; border-left: 4px solid #0073aa;">
+                    <label style="font-weight: bold;">Update mode:</label><br>
+                    <label style="margin-right: 15px;"><input type="radio" name="abs-update-mode" value="both" checked> Meta description + focus keyword</label>
+                    <label style="margin-right: 15px;"><input type="radio" name="abs-update-mode" value="meta"> Meta description only</label>
+                    <label><input type="radio" name="abs-update-mode" value="focus"> Focus keyword only</label>
+                    <br>
+                    <label style="margin-top: 8px; display: inline-block;"><input type="checkbox" id="abs-overwrite"> Overwrite existing values (by default only empty fields are filled)</label>
                 </div>
                 
                 <div id="abs-products-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background: #f9f9f9;"></div>
@@ -264,21 +281,23 @@ class ABS_AI_Meta_Generator {
             // Scan for missing meta
             $('#abs-scan-btn').on('click', function() {
                 var $btn = $(this);
+                var scanMode = $('input[name="abs-scan-mode"]:checked').val() || 'either';
                 $btn.prop('disabled', true);
                 $('#abs-scan-loading').show();
                 $('#abs-scan-results').hide();
-                
+
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
                     data: {
                         action: 'abs_scan_missing_meta',
-                        nonce: '<?php echo wp_create_nonce('abs_batch_nonce'); ?>'
+                        nonce: '<?php echo wp_create_nonce('abs_batch_nonce'); ?>',
+                        scan_mode: scanMode
                     },
                     success: function(response) {
                         $btn.prop('disabled', false);
                         $('#abs-scan-loading').hide();
-                        
+
                         if (response.success) {
                             products = response.data.products;
                             displayResults(products);
@@ -300,24 +319,32 @@ class ABS_AI_Meta_Generator {
                 var $list = $('#abs-products-list');
                 
                 if (products.length === 0) {
-                    $summary.html('<p style="color: #155724; font-weight: bold;">✓ All products have meta descriptions!</p>');
+                    $summary.html('<p style="color: #155724; font-weight: bold;">✓ All products have the requested SEO data!</p>');
                     $list.hide();
                     $('#abs-start-batch-btn').hide();
                 } else {
-                    $summary.html('<p><strong>' + products.length + ' products</strong> found without meta descriptions.</p>');
-                    
+                    $summary.html('<p><strong>' + products.length + ' products</strong> found missing SEO data.</p>');
+
                     var html = '<table style="width: 100%; border-collapse: collapse;">';
-                    html += '<thead><tr style="background: #fff;"><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;"><input type="checkbox" id="abs-header-select-all" checked></th><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;">Product</th><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;">Status</th></tr></thead>';
+                    html += '<thead><tr style="background: #fff;"><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;"><input type="checkbox" id="abs-header-select-all" checked></th><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;">Product</th><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;">Missing</th><th style="padding: 8px; text-align: left; border-bottom: 2px solid #ccc;">Status</th></tr></thead>';
                     html += '<tbody>';
-                    
+
                     products.forEach(function(product) {
+                        var missingBadges = '';
+                        if (product.missing_desc) {
+                            missingBadges += '<span style="background:#fde2e4;color:#b02a37;padding:2px 6px;border-radius:3px;margin-right:4px;font-size:11px;">Meta</span>';
+                        }
+                        if (product.missing_focus) {
+                            missingBadges += '<span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:11px;">Focus</span>';
+                        }
                         html += '<tr data-id="' + product.id + '" style="border-bottom: 1px solid #ddd;">';
                         html += '<td style="padding: 8px;"><input type="checkbox" class="abs-product-checkbox" value="' + product.id + '" checked></td>';
                         html += '<td style="padding: 8px;"><a href="' + product.edit_url + '" target="_blank">' + product.title + '</a><br><small style="color: #666;">' + product.url + '</small></td>';
+                        html += '<td style="padding: 8px;">' + missingBadges + '</td>';
                         html += '<td style="padding: 8px;" class="abs-status"><span style="color: #666;">Pending</span></td>';
                         html += '</tr>';
                     });
-                    
+
                     html += '</tbody></table>';
                     $list.html(html).show();
                     $('#abs-start-batch-btn').show();
@@ -402,19 +429,26 @@ class ABS_AI_Meta_Generator {
                     $row.find('.abs-status').html('<span style="color: #0073aa;">Processing...</span>');
                     logMessage('Processing: ' + productTitle, 'info');
                     
+                    var updateMode = $('input[name="abs-update-mode"]:checked').val() || 'both';
+                    var overwrite = $('#abs-overwrite').is(':checked') ? '1' : '0';
+
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
                         data: {
                             action: 'abs_batch_generate_meta',
                             nonce: '<?php echo wp_create_nonce('abs_batch_nonce'); ?>',
-                            post_id: productId
+                            post_id: productId,
+                            update_mode: updateMode,
+                            overwrite: overwrite
                         },
                         success: function(response) {
                             if (response.success) {
                                 successful++;
-                                $row.find('.abs-status').html('<span style="color: #155724;">✓ Done (' + response.data.charCount + ' chars)</span>');
-                                logMessage('✓ Success: ' + productTitle + ' - ' + response.data.meta.substring(0, 50) + '...', 'success');
+                                var savedFields = (response.data.savedFields || []).join(', ') || 'none (existing values kept)';
+                                var focusTxt = response.data.focusKeyword ? ' | Focus: "' + response.data.focusKeyword + '"' : '';
+                                $row.find('.abs-status').html('<span style="color: #155724;">✓ ' + savedFields + ' (' + response.data.charCount + ' chars)</span>');
+                                logMessage('✓ Success: ' + productTitle + ' - Saved: ' + savedFields + focusTxt, 'success');
                             } else {
                                 failed++;
                                 $row.find('.abs-status').html('<span style="color: #dc3545;">✗ ' + response.data.message + '</span>');
@@ -504,34 +538,47 @@ class ABS_AI_Meta_Generator {
         }
         ?>
         <div id="abs-ai-meta-container">
-            <p class="description">Scans the live product URL and generates a 160-character SEO meta description.</p>
-            
+            <p class="description">Scans the live product URL and generates a 160-character SEO meta description plus a focus keyword.</p>
+
             <div style="margin: 10px 0;">
                 <button type="button" id="abs-generate-meta-btn" class="button button-primary" style="width: 100%;">
                     <span class="dashicons dashicons-admin-generic" style="margin-top: 3px;"></span>
-                    Scan URL &amp; Generate Meta
+                    Scan URL &amp; Generate
                 </button>
             </div>
-            
+
             <div id="abs-meta-preview" style="display: none; margin-top: 10px;">
-                <label><strong>Generated Meta:</strong></label>
-                <textarea id="abs-generated-meta" rows="4" style="width: 100%; margin-top: 5px;" readonly></textarea>
+                <label><strong>Generated Meta Description:</strong></label>
+                <textarea id="abs-generated-meta" rows="4" style="width: 100%; margin-top: 5px;"></textarea>
                 <p id="abs-meta-char-count" style="margin: 5px 0; font-size: 11px; color: #666;"></p>
-                <div style="display: flex; gap: 5px; margin-top: 10px;">
-                    <button type="button" id="abs-apply-meta-btn" class="button button-primary" style="flex: 1;">
-                        Apply to Yoast
+
+                <label style="margin-top: 10px; display: block;"><strong>Focus Keyword:</strong></label>
+                <input type="text" id="abs-generated-focus" style="width: 100%; margin-top: 5px;" />
+                <p style="margin: 5px 0; font-size: 11px; color: #666;">You can edit both fields before applying.</p>
+
+                <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 10px;">
+                    <button type="button" id="abs-apply-both-btn" class="button button-primary" style="width: 100%;">
+                        Apply Both to Yoast
                     </button>
-                    <button type="button" id="abs-regenerate-meta-btn" class="button" style="flex: 1;">
+                    <div style="display: flex; gap: 5px;">
+                        <button type="button" id="abs-apply-meta-btn" class="button" style="flex: 1;">
+                            Apply Meta Only
+                        </button>
+                        <button type="button" id="abs-apply-focus-btn" class="button" style="flex: 1;">
+                            Apply Focus Only
+                        </button>
+                    </div>
+                    <button type="button" id="abs-regenerate-meta-btn" class="button" style="width: 100%;">
                         Regenerate
                     </button>
                 </div>
             </div>
-            
+
             <div id="abs-meta-loading" style="display: none; text-align: center; padding: 20px;">
                 <span class="spinner is-active" style="float: none;"></span>
                 <p>Scanning live URL...</p>
             </div>
-            
+
             <div id="abs-meta-error" style="display: none; color: #d63638; margin-top: 10px;"></div>
         </div>
         <?php
@@ -555,7 +602,7 @@ class ABS_AI_Meta_Generator {
             'abs-ai-meta-admin',
             plugin_dir_url(__FILE__) . 'admin.js',
             ['jquery'],
-            '1.1.1',
+            '1.2.0',
             true
         );
         
@@ -599,17 +646,18 @@ class ABS_AI_Meta_Generator {
         
         // Generate meta description via AI
         $result = $this->call_ai_api($page_content, $url);
-        
+
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
-        
+
         wp_send_json_success([
-            'meta' => $result,
-            'charCount' => strlen($result),
+            'meta' => $result['meta_description'],
+            'charCount' => strlen($result['meta_description']),
+            'focusKeyword' => $result['focus_keyword'],
         ]);
     }
-    
+
     /**
      * Fetch and parse content from the live URL
      */
@@ -800,12 +848,26 @@ class ABS_AI_Meta_Generator {
         }
         
         $post_id = intval($_POST['post_id']);
-        $meta_description = sanitize_text_field($_POST['meta_description']);
-        
+        $meta_description = isset($_POST['meta_description']) ? sanitize_text_field($_POST['meta_description']) : '';
+        $focus_keyword = isset($_POST['focus_keyword']) ? sanitize_text_field($_POST['focus_keyword']) : '';
+
+        $saved = [];
+
         // Save to Yoast SEO meta
-        update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_description);
-        
-        wp_send_json_success(['message' => 'Meta description saved']);
+        if (!empty($meta_description)) {
+            update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_description);
+            $saved[] = 'meta_description';
+        }
+
+        if (!empty($focus_keyword)) {
+            update_post_meta($post_id, '_yoast_wpseo_focuskw', $focus_keyword);
+            $saved[] = 'focus_keyword';
+        }
+
+        wp_send_json_success([
+            'message' => 'Saved: ' . implode(', ', $saved),
+            'saved' => $saved,
+        ]);
     }
     
     /**
@@ -826,28 +888,56 @@ class ABS_AI_Meta_Generator {
             'fields' => 'ids',
         ];
         
+        $scan_mode = isset($_POST['scan_mode']) ? sanitize_text_field($_POST['scan_mode']) : 'either';
+
         $product_ids = get_posts($args);
         $missing_meta = [];
-        
+
         foreach ($product_ids as $product_id) {
             $meta_desc = get_post_meta($product_id, '_yoast_wpseo_metadesc', true);
-            
-            // Check if meta is empty or just whitespace
-            if (empty(trim($meta_desc))) {
+            $focus_kw = get_post_meta($product_id, '_yoast_wpseo_focuskw', true);
+
+            $missing_desc = empty(trim($meta_desc));
+            $missing_focus = empty(trim($focus_kw));
+
+            // Decide whether to include based on scan mode
+            $include = false;
+            if ($scan_mode === 'meta' && $missing_desc) {
+                $include = true;
+            } elseif ($scan_mode === 'focus' && $missing_focus) {
+                $include = true;
+            } elseif ($scan_mode === 'both' && $missing_desc && $missing_focus) {
+                $include = true;
+            } else {
+                // default: 'either' - missing either one
+                if ($missing_desc || $missing_focus) {
+                    $include = true;
+                }
+            }
+
+            if ($include) {
                 $product = get_post($product_id);
+                $missing_list = [];
+                if ($missing_desc) $missing_list[] = 'meta';
+                if ($missing_focus) $missing_list[] = 'focus';
+
                 $missing_meta[] = [
                     'id' => $product_id,
                     'title' => $product->post_title,
                     'url' => get_permalink($product_id),
                     'edit_url' => get_edit_post_link($product_id, 'raw'),
+                    'missing' => $missing_list,
+                    'missing_desc' => $missing_desc,
+                    'missing_focus' => $missing_focus,
                 ];
             }
         }
-        
+
         wp_send_json_success([
             'products' => $missing_meta,
             'total_products' => count($product_ids),
             'missing_count' => count($missing_meta),
+            'scan_mode' => $scan_mode,
         ]);
     }
     
@@ -882,20 +972,45 @@ class ABS_AI_Meta_Generator {
             wp_send_json_error(['message' => $page_content->get_error_message()]);
         }
         
-        // Generate meta description via AI
+        // Determine what to update based on the batch mode
+        $update_mode = isset($_POST['update_mode']) ? sanitize_text_field($_POST['update_mode']) : 'both';
+
+        // Respect existing values unless "overwrite" is requested
+        $overwrite = isset($_POST['overwrite']) && $_POST['overwrite'] === '1';
+        $existing_meta = get_post_meta($post_id, '_yoast_wpseo_metadesc', true);
+        $existing_focus = get_post_meta($post_id, '_yoast_wpseo_focuskw', true);
+
+        // Generate meta description + focus keyword via AI
         $result = $this->call_ai_api($page_content, $url);
-        
+
         if (is_wp_error($result)) {
             wp_send_json_error(['message' => $result->get_error_message()]);
         }
-        
-        // Save directly to Yoast meta
-        update_post_meta($post_id, '_yoast_wpseo_metadesc', $result);
-        
+
+        $saved_fields = [];
+
+        // Save meta description
+        if (in_array($update_mode, ['both', 'meta'], true)) {
+            if ($overwrite || empty(trim($existing_meta))) {
+                update_post_meta($post_id, '_yoast_wpseo_metadesc', $result['meta_description']);
+                $saved_fields[] = 'meta';
+            }
+        }
+
+        // Save focus keyword
+        if (in_array($update_mode, ['both', 'focus'], true)) {
+            if (!empty($result['focus_keyword']) && ($overwrite || empty(trim($existing_focus)))) {
+                update_post_meta($post_id, '_yoast_wpseo_focuskw', $result['focus_keyword']);
+                $saved_fields[] = 'focus';
+            }
+        }
+
         wp_send_json_success([
-            'meta' => $result,
-            'charCount' => strlen($result),
+            'meta' => $result['meta_description'],
+            'charCount' => strlen($result['meta_description']),
+            'focusKeyword' => $result['focus_keyword'],
             'saved' => true,
+            'savedFields' => $saved_fields,
         ]);
     }
     
@@ -958,8 +1073,9 @@ class ABS_AI_Meta_Generator {
         
         $base_prompt = "You are an SEO expert for American Biotech Supply, a company that sells scientific and medical refrigeration equipment.
 
-I have scanned a product page URL and extracted the following content. Based ONLY on this scanned content, write a compelling meta description that:
+I have scanned a product page URL and extracted the following content. Based ONLY on this scanned content, generate TWO things:
 
+A) A META DESCRIPTION that:
 1. Is EXACTLY 155-160 characters (this is critical - count carefully)
 2. Accurately reflects what is on the page
 3. Includes the key product features and benefits mentioned on the page
@@ -967,23 +1083,76 @@ I have scanned a product page URL and extracted the following content. Based ONL
 5. Ends with a complete thought (no cut-off sentences)
 6. Focuses on what makes this product valuable (temperature control, compliance, reliability, etc.)
 
-Do NOT include:
+Do NOT include in the meta description:
 - The company name
-- Pricing information  
+- Pricing information
 - Call-to-action phrases like \"Shop now\" or \"Buy today\"
 - Quotation marks around the description
 - Any information NOT found in the scanned content below
+
+B) A FOCUS KEYWORD that:
+1. Is 1-4 words long (short phrase preferred)
+2. Is the primary SEO search term a customer would use to find this product
+3. Is drawn directly from the product title and scanned page content
+4. Is lowercase, no punctuation, no quotes
+5. Is NOT the company name and NOT a generic word like \"product\" or \"equipment\" alone
 
 ";
 
         if (!empty($custom_prompt)) {
             $base_prompt .= "Additional instructions: {$custom_prompt}\n\n";
         }
-        
+
         $base_prompt .= "=== SCANNED PAGE CONTENT ===\n{$content_text}\n=== END SCANNED CONTENT ===\n\n";
-        $base_prompt .= "Write ONLY the meta description, nothing else. No explanations, no character count, just the meta description text.";
-        
+        $base_prompt .= "Respond with ONLY a valid JSON object, no markdown, no code fences, no explanations. Use exactly this format:\n";
+        $base_prompt .= '{"meta_description": "...", "focus_keyword": "..."}';
+
         return $base_prompt;
+    }
+
+    /**
+     * Parse AI response - expects JSON with meta_description and focus_keyword.
+     * Falls back to treating the whole response as the meta description if JSON parsing fails.
+     */
+    private function parse_ai_response($raw) {
+        $raw = trim($raw);
+
+        // Strip common markdown code fences if the model added them
+        $raw = preg_replace('/^```(?:json)?\s*/i', '', $raw);
+        $raw = preg_replace('/\s*```\s*$/', '', $raw);
+        $raw = trim($raw);
+
+        // Try to extract a JSON object from within the response
+        $json_start = strpos($raw, '{');
+        $json_end = strrpos($raw, '}');
+        $meta = '';
+        $focus = '';
+
+        if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
+            $json_str = substr($raw, $json_start, $json_end - $json_start + 1);
+            $decoded = json_decode($json_str, true);
+            if (is_array($decoded)) {
+                if (isset($decoded['meta_description'])) {
+                    $meta = trim($decoded['meta_description']);
+                }
+                if (isset($decoded['focus_keyword'])) {
+                    $focus = trim($decoded['focus_keyword']);
+                }
+            }
+        }
+
+        // Fallback: if JSON parse failed, treat entire response as meta description
+        if (empty($meta)) {
+            $meta = $raw;
+        }
+
+        // Clean focus keyword: strip quotes and trailing punctuation
+        $focus = trim($focus, " \t\n\r\0\x0B\"'.,;:");
+
+        return [
+            'meta_description' => $meta,
+            'focus_keyword' => $focus,
+        ];
     }
     
     /**
@@ -1004,26 +1173,26 @@ Do NOT include:
                         'content' => $prompt,
                     ],
                 ],
-                'max_tokens' => 200,
+                'max_tokens' => 300,
                 'temperature' => 0.7,
             ]),
         ]);
-        
+
         if (is_wp_error($response)) {
             return $response;
         }
-        
+
         $body = json_decode(wp_remote_retrieve_body($response), true);
-        
+
         if (isset($body['error'])) {
             return new WP_Error('api_error', $body['error']['message']);
         }
-        
+
         if (!isset($body['choices'][0]['message']['content'])) {
             return new WP_Error('api_error', 'Invalid API response');
         }
-        
-        return trim($body['choices'][0]['message']['content']);
+
+        return $this->parse_ai_response($body['choices'][0]['message']['content']);
     }
     
     /**
@@ -1039,7 +1208,7 @@ Do NOT include:
             ],
             'body' => json_encode([
                 'model' => 'claude-sonnet-4-20250514',
-                'max_tokens' => 200,
+                'max_tokens' => 300,
                 'messages' => [
                     [
                         'role' => 'user',
@@ -1048,22 +1217,22 @@ Do NOT include:
                 ],
             ]),
         ]);
-        
+
         if (is_wp_error($response)) {
             return $response;
         }
-        
+
         $body = json_decode(wp_remote_retrieve_body($response), true);
-        
+
         if (isset($body['error'])) {
             return new WP_Error('api_error', $body['error']['message']);
         }
-        
+
         if (!isset($body['content'][0]['text'])) {
             return new WP_Error('api_error', 'Invalid API response');
         }
-        
-        return trim($body['content'][0]['text']);
+
+        return $this->parse_ai_response($body['content'][0]['text']);
     }
 }
 

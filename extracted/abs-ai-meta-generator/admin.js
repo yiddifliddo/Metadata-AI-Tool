@@ -1,33 +1,35 @@
 (function($) {
     'use strict';
-    
+
     var AbsAiMeta = {
-        
+
         init: function() {
             this.bindEvents();
         },
-        
+
         bindEvents: function() {
             $(document).on('click', '#abs-generate-meta-btn', this.generateMeta.bind(this));
             $(document).on('click', '#abs-regenerate-meta-btn', this.generateMeta.bind(this));
-            $(document).on('click', '#abs-apply-meta-btn', this.applyToYoast.bind(this));
+            $(document).on('click', '#abs-apply-meta-btn', this.applyMetaOnly.bind(this));
+            $(document).on('click', '#abs-apply-focus-btn', this.applyFocusOnly.bind(this));
+            $(document).on('click', '#abs-apply-both-btn', this.applyBoth.bind(this));
+            $(document).on('input', '#abs-generated-meta', this.updateCharCount.bind(this));
         },
-        
+
         generateMeta: function(e) {
             e.preventDefault();
-            
-            var $container = $('#abs-ai-meta-container');
+
             var $preview = $('#abs-meta-preview');
             var $loading = $('#abs-meta-loading');
             var $error = $('#abs-meta-error');
             var $generateBtn = $('#abs-generate-meta-btn');
-            
+
             // Reset UI
             $preview.hide();
             $error.hide();
             $loading.show();
             $generateBtn.prop('disabled', true);
-            
+
             $.ajax({
                 url: absAiMeta.ajaxUrl,
                 type: 'POST',
@@ -39,15 +41,11 @@
                 success: function(response) {
                     $loading.hide();
                     $generateBtn.prop('disabled', false);
-                    
+
                     if (response.success) {
                         $('#abs-generated-meta').val(response.data.meta);
-                        $('#abs-meta-char-count').html(
-                            '<strong>' + response.data.charCount + '</strong> characters ' +
-                            (response.data.charCount <= 160 ? 
-                                '<span style="color: #00a32a;">✓ Good length</span>' : 
-                                '<span style="color: #d63638;">⚠ Too long</span>')
-                        );
+                        $('#abs-generated-focus').val(response.data.focusKeyword || '');
+                        AbsAiMeta.updateCharCount();
                         $preview.show();
                     } else {
                         $error.html('Error: ' + response.data.message).show();
@@ -60,20 +58,53 @@
                 }
             });
         },
-        
-        applyToYoast: function(e) {
+
+        updateCharCount: function() {
+            var count = ($('#abs-generated-meta').val() || '').length;
+            $('#abs-meta-char-count').html(
+                '<strong>' + count + '</strong> characters ' +
+                (count <= 160 ?
+                    '<span style="color: #00a32a;">✓ Good length</span>' :
+                    '<span style="color: #d63638;">⚠ Too long</span>')
+            );
+        },
+
+        applyMetaOnly: function(e) {
             e.preventDefault();
-            
             var metaDescription = $('#abs-generated-meta').val();
-            
-            if (!metaDescription) {
-                alert('No meta description to apply');
-                return;
-            }
-            
-            // Try multiple methods to set the Yoast meta description
+            if (!metaDescription) { alert('No meta description to apply'); return; }
+            this.applyMetaToYoast(metaDescription);
+            this.saveDirectly(metaDescription, '');
+            this.showSuccess('#abs-apply-meta-btn', 'Meta applied!');
+        },
+
+        applyFocusOnly: function(e) {
+            e.preventDefault();
+            var focusKeyword = $('#abs-generated-focus').val();
+            if (!focusKeyword) { alert('No focus keyword to apply'); return; }
+            this.applyFocusToYoast(focusKeyword);
+            this.saveDirectly('', focusKeyword);
+            this.showSuccess('#abs-apply-focus-btn', 'Focus applied!');
+        },
+
+        applyBoth: function(e) {
+            e.preventDefault();
+            var metaDescription = $('#abs-generated-meta').val();
+            var focusKeyword = $('#abs-generated-focus').val();
+            if (!metaDescription && !focusKeyword) { alert('Nothing to apply'); return; }
+            if (metaDescription) this.applyMetaToYoast(metaDescription);
+            if (focusKeyword) this.applyFocusToYoast(focusKeyword);
+            this.saveDirectly(metaDescription, focusKeyword);
+            this.showSuccess('#abs-apply-both-btn', 'Applied!');
+            this.scrollToYoast();
+        },
+
+        /**
+         * Try multiple methods to set Yoast meta description in the live UI.
+         */
+        applyMetaToYoast: function(metaDescription) {
             var success = false;
-            
+
             // Method 1: Yoast SEO newer versions (React-based editor)
             if (typeof wp !== 'undefined' && wp.data && wp.data.dispatch) {
                 try {
@@ -83,21 +114,20 @@
                         success = true;
                     }
                 } catch(e) {
-                    console.log('Yoast dispatch method failed:', e);
+                    console.log('Yoast dispatch (meta) failed:', e);
                 }
             }
-            
-            // Method 2: Direct input field (classic editor or fallback)
+
+            // Method 2: Direct input field
             if (!success) {
-                // Try the snippet editor input
                 var $yoastInput = $('#yoast_wpseo_metadesc');
                 if ($yoastInput.length) {
                     $yoastInput.val(metaDescription).trigger('change').trigger('input');
                     success = true;
                 }
             }
-            
-            // Method 3: Hidden input that Yoast uses
+
+            // Method 3: Hidden input
             if (!success) {
                 var $hiddenInput = $('input[name="yoast_wpseo_metadesc"]');
                 if ($hiddenInput.length) {
@@ -105,8 +135,8 @@
                     success = true;
                 }
             }
-            
-            // Method 4: Try to find the Yoast snippet editor textarea
+
+            // Method 4: Snippet editor replacevar input
             if (!success) {
                 var $snippetTextarea = $('.yst-replacevar__input[data-id="metadesc"]');
                 if ($snippetTextarea.length) {
@@ -114,12 +144,11 @@
                     success = true;
                 }
             }
-            
-            // Method 5: For Yoast Premium / newer UI
+
+            // Method 5: Premium/newer editable field
             if (!success) {
                 var $editableDiv = $('[id*="snippet-editor-field-description"]');
                 if ($editableDiv.length) {
-                    // It might be a contenteditable div
                     if ($editableDiv.attr('contenteditable')) {
                         $editableDiv.text(metaDescription).trigger('input');
                     } else {
@@ -128,38 +157,78 @@
                     success = true;
                 }
             }
-            
-            // Method 6: Try clicking the edit button first, then setting value
-            if (!success) {
-                // Click on the snippet editor to open it
-                var $snippetPreview = $('.yst-snippet-editor__preview, .snippet-editor__preview');
-                if ($snippetPreview.length) {
-                    $snippetPreview.trigger('click');
-                    
-                    // Wait for editor to open, then try again
-                    setTimeout(function() {
-                        var $textarea = $('textarea[id*="metadesc"], textarea[name*="metadesc"]');
-                        if ($textarea.length) {
-                            $textarea.val(metaDescription).trigger('change').trigger('input');
+
+            return success;
+        },
+
+        /**
+         * Try multiple methods to set Yoast focus keyword in the live UI.
+         */
+        applyFocusToYoast: function(focusKeyword) {
+            var success = false;
+
+            // Method 1: Yoast data store
+            if (typeof wp !== 'undefined' && wp.data && wp.data.dispatch) {
+                try {
+                    var yoastStore = wp.data.dispatch('yoast-seo/editor');
+                    if (yoastStore) {
+                        // Newer Yoast versions use setFocusKeyphrase
+                        if (typeof yoastStore.setFocusKeyphrase === 'function') {
+                            yoastStore.setFocusKeyphrase(focusKeyword);
+                            success = true;
+                        } else if (typeof yoastStore.updateData === 'function') {
+                            yoastStore.updateData({ focusKeyphrase: focusKeyword, keyword: focusKeyword });
                             success = true;
                         }
-                    }, 300);
+                    }
+                } catch(e) {
+                    console.log('Yoast dispatch (focus) failed:', e);
                 }
             }
-            
-            // Method 7: Store in post meta directly via AJAX (most reliable fallback)
-            this.saveMetaDirectly(metaDescription);
-            
-            if (success) {
-                this.showSuccess();
-            } else {
-                // Even if we couldn't find the field, we saved it directly
-                this.showSuccess('Meta saved! Refresh to see in Yoast.');
+
+            // Method 2: Classic editor input
+            if (!success) {
+                var $focusInput = $('#yoast_wpseo_focuskw');
+                if ($focusInput.length) {
+                    $focusInput.val(focusKeyword).trigger('change').trigger('input');
+                    success = true;
+                }
             }
+
+            // Method 3: Hidden input (multiple possible names)
+            if (!success) {
+                var $hiddenFocus = $('input[name="yoast_wpseo_focuskw"], input[name="_yoast_wpseo_focuskw"]');
+                if ($hiddenFocus.length) {
+                    $hiddenFocus.val(focusKeyword).trigger('change');
+                    success = true;
+                }
+            }
+
+            // Method 4: React snippet editor focus keyphrase input
+            if (!success) {
+                var $keyphraseInput = $('#focus-keyword-input-metabox, #focus-keyword-input, input[id*="focus-keyword"]');
+                if ($keyphraseInput.length) {
+                    // Use native setter to make React notice the change
+                    $keyphraseInput.each(function() {
+                        var el = this;
+                        var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                        if (nativeSetter && nativeSetter.set) {
+                            nativeSetter.set.call(el, focusKeyword);
+                        } else {
+                            el.value = focusKeyword;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                    success = true;
+                }
+            }
+
+            return success;
         },
-        
-        saveMetaDirectly: function(metaDescription) {
-            // Also save directly to post meta as a reliable fallback
+
+        saveDirectly: function(metaDescription, focusKeyword) {
+            // Always persist to post meta as a reliable fallback
             $.ajax({
                 url: absAiMeta.ajaxUrl,
                 type: 'POST',
@@ -167,40 +236,36 @@
                     action: 'abs_save_yoast_meta',
                     nonce: absAiMeta.nonce,
                     post_id: absAiMeta.postId,
-                    meta_description: metaDescription
+                    meta_description: metaDescription || '',
+                    focus_keyword: focusKeyword || ''
                 }
             });
         },
-        
-        showSuccess: function(message) {
-            message = message || 'Meta description applied to Yoast!';
-            
-            var $applyBtn = $('#abs-apply-meta-btn');
-            var originalText = $applyBtn.text();
-            
-            $applyBtn.text('✓ Applied!').addClass('button-success');
-            
+
+        showSuccess: function(buttonSelector, message) {
+            var $btn = $(buttonSelector);
+            var originalText = $btn.text();
+            $btn.text('✓ ' + message).addClass('button-success');
             setTimeout(function() {
-                $applyBtn.text(originalText).removeClass('button-success');
+                $btn.text(originalText).removeClass('button-success');
             }, 2000);
-            
-            // Also scroll to Yoast metabox to show user
+        },
+
+        scrollToYoast: function() {
             var $yoastBox = $('#wpseo_meta');
             if ($yoastBox.length) {
                 $('html, body').animate({
                     scrollTop: $yoastBox.offset().top - 50
                 }, 500);
-                
-                // Try to expand the Yoast metabox if collapsed
                 if ($yoastBox.hasClass('closed')) {
                     $yoastBox.find('.hndle, .handlediv').trigger('click');
                 }
             }
         }
     };
-    
+
     $(document).ready(function() {
         AbsAiMeta.init();
     });
-    
+
 })(jQuery);
