@@ -4,7 +4,7 @@ Tags: seo, yoast, meta description, focus keyword, ai, openai, anthropic, woocom
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -52,7 +52,7 @@ Because it scans the **live rendered URL** rather than the raw `post_content`, i
 
 = Which AI models does it use? =
 
-OpenAI: `gpt-4o-mini`. Anthropic: `claude-opus-4-6` (Claude Opus 4.6 alias). These can be swapped in the source if you need different models.
+OpenAI: `gpt-4o-mini`. Anthropic: `claude-opus-4-8` (Claude Opus 4.8 alias). These can be swapped in the source if you need different models.
 
 = Will it overwrite my existing meta descriptions or focus keywords? =
 
@@ -83,6 +83,9 @@ The batch tool lets you control both batch size (1-10 at a time) and the delay b
 
 == Changelog ==
 
+= 1.3.2 =
+* Update Anthropic model to the `claude-opus-4-8` alias (Claude Opus 4.8).
+
 = 1.3.1 =
 * Update Anthropic model to the `claude-opus-4-6` alias (Claude Opus 4.6).
 
@@ -107,6 +110,9 @@ The batch tool lets you control both batch size (1-10 at a time) and the delay b
 * Initial release: AI meta description generation from live URL scans.
 
 == Upgrade Notice ==
+
+= 1.3.2 =
+Updates the Anthropic model to `claude-opus-4-8` (Claude Opus 4.8 alias).
 
 = 1.3.1 =
 Updates the Anthropic model to `claude-opus-4-6` (Claude Opus 4.6 alias).
